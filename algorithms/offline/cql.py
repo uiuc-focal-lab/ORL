@@ -18,6 +18,9 @@ import torch.nn.functional as F
 import wandb
 from torch.distributions import Normal, TanhTransform, TransformedDistribution
 
+from pbrl import scale_rewards, generate_pbrl_dataset, make_latent_reward_dataset, train_latent, predict_and_label_latent_reward
+from pbrl import plot_reward, label_by_trajectory_reward
+
 TensorBatch = List[torch.Tensor]
 
 
@@ -868,6 +871,15 @@ def train(config: TrainConfig):
         config.buffer_size,
         config.device,
     )
+
+    dataset = scale_rewards(dataset)
+    pbrl_dataset = generate_pbrl_dataset(dataset, pbrl_dataset_file_path='CORL/saved/pbrl_dataset_50000.npz',
+                                         num_t=50000, len_t=20)
+    # latent_reward_model, indices = train_latent(dataset, pbrl_dataset, model_file_path='CORL/saved/latent_reward_model_50000.pth')
+    # dataset = predict_and_label_latent_reward(dataset, latent_reward_model, indices)
+    dataset = label_by_trajectory_reward(dataset, pbrl_dataset, num_t=50000, len_t=20)
+    # plot_reward(dataset)
+
     replay_buffer.load_d4rl_dataset(dataset)
 
     max_action = float(env.action_space.high[0])
