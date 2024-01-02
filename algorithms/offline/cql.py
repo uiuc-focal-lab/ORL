@@ -28,11 +28,11 @@ TensorBatch = List[torch.Tensor]
 class TrainConfig:
     # Experiment
     device: str = "cuda"
-    env: str = "halfcheetah-medium-expert-v2"  # OpenAI gym environment name
+    env: str = "halfcheetah-expert-v2"  # OpenAI gym environment name
     seed: int = 0  # Sets Gym, PyTorch and Numpy seeds
     eval_freq: int = int(5e3)  # How often (time steps) we evaluate
     n_episodes: int = 10  # How many episodes run during evaluation
-    max_timesteps: int = int(1e6)  # Max time steps to run environment
+    max_timesteps: int = int(5e5)  # Max time steps to run environment
     checkpoints_path: Optional[str] = None  # Save path
     load_model: str = ""  # Model load file name, "" doesn't load
 
@@ -873,12 +873,11 @@ def train(config: TrainConfig):
     )
 
     dataset = scale_rewards(dataset)
-    pbrl_dataset = generate_pbrl_dataset(dataset, pbrl_dataset_file_path='CORL/saved/pbrl_dataset_50000.npz',
-                                         num_t=50000, len_t=20)
-    # latent_reward_model, indices = train_latent(dataset, pbrl_dataset, model_file_path='CORL/saved/latent_reward_model_50000.pth')
-    # dataset = predict_and_label_latent_reward(dataset, latent_reward_model, indices)
-    dataset = label_by_trajectory_reward(dataset, pbrl_dataset, num_t=50000, len_t=20)
-    # plot_reward(dataset)
+    num_t = 25000
+    pbrl_dataset = generate_pbrl_dataset(dataset, pbrl_dataset_file_path=f'CORL/saved/pbrl_dataset_{config.env}_{num_t}.npz', num_t=num_t)
+    latent_reward_model, indices = train_latent(dataset, pbrl_dataset, model_file_path=f'CORL/saved/latent_reward_model_{config.env}_{num_t}.pth', num_t=num_t)
+    dataset = predict_and_label_latent_reward(dataset, latent_reward_model, indices)
+    # dataset = label_by_trajectory_reward(dataset, pbrl_dataset, num_t=num_t)
 
     replay_buffer.load_d4rl_dataset(dataset)
 
