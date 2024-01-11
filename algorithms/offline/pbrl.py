@@ -81,7 +81,7 @@ def mlp(sizes, activation, output_activation=nn.Identity):
     return nn.Sequential(*layers)
     
 class LatentRewardModel(nn.Module):
-    def __init__(self, input_dim = 23, hidden_dim = 64, output_dim = 1, activation = nn.ReLU):
+    def __init__(self, input_dim, hidden_dim = 64, output_dim = 1, activation = nn.ReLU):
         super().__init__()
         self.multi_layer = mlp([input_dim, hidden_dim, hidden_dim, hidden_dim, 1], activation=activation)
         self.one_layer = nn.Linear(input_dim, output_dim)
@@ -125,8 +125,9 @@ def train_latent(dataset, pbrl_dataset, model_file_path, num_t,
         if epoch + 1 == n_epochs:
             return model, indices
     
-    assert((num_t * 2 * len_t, 23) == X.shape)
-    model = LatentRewardModel()
+    dim = dataset['observations'].shape[1] + dataset['actions'].shape[1]
+    assert((num_t * 2 * len_t, dim) == X.shape)
+    model = LatentRewardModel(input_dim=dim)
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=0.001)
     best_loss = float('inf')

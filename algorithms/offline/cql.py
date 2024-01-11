@@ -28,12 +28,12 @@ TensorBatch = List[torch.Tensor]
 class TrainConfig:
     # Experiment
     device: str = "cuda"
-    env: str = "halfcheetah-expert-v2"  # OpenAI gym environment name
+    env: str = "hopper-medium-expert-v2"  # OpenAI gym environment name
     seed: int = 0  # Sets Gym, PyTorch and Numpy seeds
     eval_freq: int = int(5e3)  # How often (time steps) we evaluate
     n_episodes: int = 10  # How many episodes run during evaluation
-    max_timesteps: int = int(5e5)  # Max time steps to run environment
-    checkpoints_path: Optional[str] = None  # Save path
+    max_timesteps: int = int(1e6)  # Max time steps to run environment
+    checkpoints_path: Optional[str] = "CORL/saved/models"  # Save path
     load_model: str = ""  # Model load file name, "" doesn't load
 
     # CQL
@@ -75,7 +75,7 @@ class TrainConfig:
     name: str = "CQL"
 
     def __post_init__(self):
-        self.name = f"{self.name}-{self.env}-{str(uuid.uuid4())[:8]}"
+        self.name = f"{self.name}-{self.env}-{'original'}"
         if self.checkpoints_path is not None:
             self.checkpoints_path = os.path.join(self.checkpoints_path, self.name)
 
@@ -872,11 +872,11 @@ def train(config: TrainConfig):
         config.device,
     )
 
-    dataset = scale_rewards(dataset)
-    num_t = 25000
-    pbrl_dataset = generate_pbrl_dataset(dataset, pbrl_dataset_file_path=f'CORL/saved/pbrl_dataset_{config.env}_{num_t}.npz', num_t=num_t)
-    latent_reward_model, indices = train_latent(dataset, pbrl_dataset, model_file_path=f'CORL/saved/latent_reward_model_{config.env}_{num_t}.pth', num_t=num_t)
-    dataset = predict_and_label_latent_reward(dataset, latent_reward_model, indices)
+    # dataset = scale_rewards(dataset)
+    # num_t = 50000
+    # pbrl_dataset = generate_pbrl_dataset(dataset, pbrl_dataset_file_path=f'CORL/saved/pbrl_datasets/pbrl_dataset_{config.env}_{num_t}.npz', num_t=num_t)
+    # # latent_reward_model, indices = train_latent(dataset, pbrl_dataset, model_file_path=f'CORL/saved/models/latent_reward_model_{config.env}_{num_t}.pth', num_t=num_t)
+    # # dataset = predict_and_label_latent_reward(dataset, latent_reward_model, indices)
     # dataset = label_by_trajectory_reward(dataset, pbrl_dataset, num_t=num_t)
 
     replay_buffer.load_d4rl_dataset(dataset)
