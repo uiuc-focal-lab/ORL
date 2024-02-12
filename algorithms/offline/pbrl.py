@@ -119,13 +119,13 @@ def make_latent_reward_dataset(dataset, pbrl_dataset, num_t, len_t=20):
 def train_latent(dataset, pbrl_dataset, model_file_path, num_t,
                  n_epochs = 1000, len_t = 20, patience=5):
     X, mus, indices = make_latent_reward_dataset(dataset, pbrl_dataset, num_t=num_t, len_t=len_t)
+    dim = dataset['observations'].shape[1] + dataset['actions'].shape[1]
     if os.path.exists(model_file_path):
         print(f'model successfully loaded from {model_file_path}')
-        model, epoch = load_model(model_file_path)
+        model, epoch = load_model(model_file_path, dim)
         if epoch + 1 == n_epochs:
             return model, indices
     
-    dim = dataset['observations'].shape[1] + dataset['actions'].shape[1]
     assert((num_t * 2 * len_t, dim) == X.shape)
     model = LatentRewardModel(input_dim=dim)
     criterion = nn.CrossEntropyLoss()
@@ -196,8 +196,8 @@ def predict_and_label_latent_reward(dataset, latent_reward_model, indices):
         sampled_dataset['terminals'] = sampled_dataset['terminals'][indices]
         return sampled_dataset
 
-def load_model(model_file_path):
-    model = LatentRewardModel()
+def load_model(model_file_path, dim):
+    model = LatentRewardModel(input_dim=dim)
     checkpoint = torch.load(model_file_path)
     model.load_state_dict(checkpoint['model_state_dict'])
     epoch = checkpoint['epoch']
@@ -213,3 +213,7 @@ def plot_reward(dataset):
     # plt.savefig('reward_plot.png')
     print("Number of states:", dataset['terminals'].shape[0])
     print("Number of terminal states:", np.sum(dataset['terminals']))
+
+
+# todo -> implement the batch setting for the 1/-1 method
+    
