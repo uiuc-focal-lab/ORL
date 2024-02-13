@@ -16,7 +16,7 @@ def scale_rewards(dataset):
 num_t : number of pairs of trajectories
 len_t : length of each trajectory
 """
-def generate_pbrl_dataset(dataset, num_t, pbrl_dataset_file_path="", len_t=20):
+def generate_pbrl_dataset(dataset, num_t, pbrl_dataset_file_path="", len_t=16):
     if pbrl_dataset_file_path != "" and os.path.exists(pbrl_dataset_file_path):
         pbrl_dataset = np.load(pbrl_dataset_file_path)
         print(f"pbrl_dataset loaded successfully from {pbrl_dataset_file_path}")
@@ -46,11 +46,13 @@ def get_random_trajectory_reward(dataset, len_t):
     reward = np.sum(dataset['rewards'][start:start+len_t])
     return traj, reward
 
-def label_by_trajectory_reward(dataset, pbrl_dataset, num_t, len_t=20):
+def label_by_trajectory_reward(dataset, pbrl_dataset, num_t, len_t=16):
     t1s, t2s, ps = pbrl_dataset
     sampled = np.random.randint(low=0, high=num_t, size=(num_t,))
     t1s_indices = t1s[sampled].flatten()
     t2s_indices = t2s[sampled].flatten()
+    # t1s_indices = t1s.flatten()
+    # t2s_indices = t2s.flatten()
     ps_sample = ps[sampled]
     mus = bernoulli_trial_one_neg_one(ps_sample)
     repeated_mus = np.repeat(mus, len_t)
@@ -98,7 +100,7 @@ pbrl_dataset          : tuple of  (t1s, t2s, p)
 latent_reward_X : (2 * N * num_t * len_t , 23)
 mus : (2 * N * num_t * len_t, 1)
 """
-def make_latent_reward_dataset(dataset, pbrl_dataset, num_t, len_t=20):
+def make_latent_reward_dataset(dataset, pbrl_dataset, num_t, len_t=16):
     t1s, t2s, ps = pbrl_dataset
     indices = torch.randint(high=num_t, size=(num_t,))
     t1s_sample = t1s[indices]
@@ -117,7 +119,7 @@ def make_latent_reward_dataset(dataset, pbrl_dataset, num_t, len_t=20):
 
 
 def train_latent(dataset, pbrl_dataset, model_file_path, num_t,
-                 n_epochs = 1000, len_t = 20, patience=5):
+                 n_epochs = 1000, len_t = 16, patience=5):
     X, mus, indices = make_latent_reward_dataset(dataset, pbrl_dataset, num_t=num_t, len_t=len_t)
     dim = dataset['observations'].shape[1] + dataset['actions'].shape[1]
     if os.path.exists(model_file_path):
@@ -162,7 +164,7 @@ def train_latent(dataset, pbrl_dataset, model_file_path, num_t,
                 break
     return model, indices
 
-def evaluate_latent_model(model, dataset, num_t=10000, len_t = 20):
+def evaluate_latent_model(model, dataset, num_t=10000, len_t = 16):
     with torch.no_grad():
         t1s, t2s, ps = generate_pbrl_dataset(dataset, num_t=num_t)
         X_eval, mu_eval, _ = make_latent_reward_dataset(dataset, (t1s, t2s, ps), num_t)
@@ -179,7 +181,7 @@ def evaluate_latent_model(model, dataset, num_t=10000, len_t = 20):
 
 def predict_and_label_latent_reward(dataset, latent_reward_model, indices):
     with torch.no_grad():
-        print('predicting and labeling...')
+        print('predicting and labeling with reward model...')
         obss = dataset['observations']
         acts = dataset['actions']
         obs_values = obss[indices] 
@@ -203,7 +205,7 @@ def load_model(model_file_path, dim):
     epoch = checkpoint['epoch']
     return model, epoch
 
-def plot_reward(dataset):
+# def plot_reward(dataset):
     # sorted_rewards = np.sort(dataset['rewards'][::1000])
     # indices = np.arange(len(sorted_rewards))
     # plt.bar(indices, sorted_rewards, color='blue', alpha=0.7)
@@ -211,8 +213,8 @@ def plot_reward(dataset):
     # plt.xlabel('Index')
     # plt.ylabel('Sorted Rewards')
     # plt.savefig('reward_plot.png')
-    print("Number of states:", dataset['terminals'].shape[0])
-    print("Number of terminal states:", np.sum(dataset['terminals']))
+    # print("Number of states:", dataset['terminals'].shape[0])
+    # print("Number of terminal states:", np.sum(dataset['terminals']))
 
 
 # todo -> implement the batch setting for the 1/-1 method
