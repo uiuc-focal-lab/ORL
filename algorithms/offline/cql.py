@@ -19,7 +19,7 @@ import wandb
 from torch.distributions import Normal, TanhTransform, TransformedDistribution
 
 from pbrl import scale_rewards, generate_pbrl_dataset, make_latent_reward_dataset, train_latent, predict_and_label_latent_reward
-from pbrl import label_by_trajectory_reward
+from pbrl import label_by_trajectory_reward, generate_pbrl_dataset_no_overlap
 
 TensorBatch = List[torch.Tensor]
 
@@ -28,8 +28,8 @@ TensorBatch = List[torch.Tensor]
 class TrainConfig:
     # Experiment
     device: str = "cuda"
-    env: str = "halfcheetah-medium-expert-v2"  # OpenAI gym environment name
-    seed: int = 2  # Sets Gym, PyTorch and Numpy seeds
+    env: str = "hopper-medium-expert-v2"  # OpenAI gym environment name
+    seed: int = 2 # Sets Gym, PyTorch and Numpy seeds
     eval_freq: int = int(5e3)  # How often (time steps) we evaluate
     n_episodes: int = 10  # How many episodes run during evaluation
     max_timesteps: int = int(1e6)  # Max time steps to run environment
@@ -38,7 +38,7 @@ class TrainConfig:
 
     # CQL
     buffer_size: int = 2_000_000  # Replay buffer size
-    batch_size: int = 256  # Batch size for all networks
+    batch_size: int = 240  # Batch size for all networks
     discount: float = 0.99  # Discount factor
     alpha_multiplier: float = 1.0  # Multiplier for alpha in loss
     use_automatic_entropy_tuning: bool = True  # Tune entropy
@@ -75,7 +75,7 @@ class TrainConfig:
     name: str = "CQL"
 
     def __post_init__(self):
-        self.name = f"{self.name}-{self.env}-{'(-1/1)_batch'}"
+        self.name = f"{self.name}-{self.env}-{'original'}"
         if self.checkpoints_path is not None:
             self.checkpoints_path = os.path.join(self.checkpoints_path, self.name)
 
@@ -165,12 +165,12 @@ class ReplayBuffer:
         print(f"Dataset size: {n_transitions}")
 
     def sample(self, batch_size: int) -> TensorBatch:
-        num_t = 62500
-        len_t = 16
-        start_indices = np.random.randint(0, num_t, size=batch_size//len_t)
-        indices = np.array([np.arange(start, start + len_t) for start in start_indices]).flatten()
+        # num_t = 5000
+        # len_t = 20
+        # indices_of_traj = np.random.randint(0, num_t*2, size=batch_size//len_t)
+        # indices = np.array([np.arange(i*len_t, (i+1)*len_t) for i in indices_of_traj]).flatten()
 
-        # indices = np.random.randint(0, min(self._size, self._pointer), size=batch_size)
+        indices = np.random.randint(0, min(self._size, self._pointer), size=batch_size)
         states = self._states[indices]
         actions = self._actions[indices]
         rewards = self._rewards[indices]
@@ -194,7 +194,8 @@ def set_seed(
     np.random.seed(seed)
     random.seed(seed)
     torch.manual_seed(seed)
-    torch.use_deterministic_algorithms(deterministic_torch)
+    # torch.use_deterministic_algorithms(deterministic_torch)
+    torch.set_deterministic(deterministic_torch)
 
 
 def wandb_init(config: dict) -> None:
@@ -877,16 +878,16 @@ def train(config: TrainConfig):
         config.device,
     )
 
-    dataset = scale_rewards(dataset)
-    num_t =  62500
-    len_t = 16
-    pbrl_dataset = generate_pbrl_dataset(dataset, pbrl_dataset_file_path=f'CORL/saved/pbrl_datasets/pbrl_dataset_{config.env}_{num_t}_{len_t}.npz', num_t=num_t, len_t=len_t)
-    # latent_reward_model, indices = train_latent(dataset, pbrl_dataset, model_file_path=f'CORL/saved/models/latent_reward_model_{config.env}_{num_t}.pth', num_t=num_t)
+    # print(len(dataset['rewards']))
+    # print(sum(dataset['terminals']))
+    # dataset = scale_rewards(dataset) 
+    # num_t = 5000
+    # len_t = 20
+    # pbrl_dataset = generate_pbrl_dataset_no_overlap(dataset, pbrl_dataset_file_path=f'CORL/saved/pbrl_datasets/pbrl_dataset_no_overlap_{config.env}_{num_t}_{len_t}.npz', num_t=num_t, len_t=len_t)
+    # latent_reward_model, indices = train_latent(dataset, pbrl_dataset, num_t=num_t, len_t=len_t)
     # dataset = predict_and_label_latent_reward(dataset, latent_reward_model, indices)
-    dataset = label_by_trajectory_reward(dataset, pbrl_dataset, num_t=num_t)
-    # for i in range(0, 800, 16):
-    #     print(dataset['rewards'][i:i+16])
-
+    # dataset = label_by_trajectory_reward(dataset, pbrl_dataset, num_t=num_t)
+    
     replay_buffer.load_d4rl_dataset(dataset)
 
     max_action = float(env.action_space.high[0])

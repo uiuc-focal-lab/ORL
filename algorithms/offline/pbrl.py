@@ -5,6 +5,7 @@ import torch.optim as optim
 from sklearn.metrics import accuracy_score
 import os
 import matplotlib.pyplot as plt
+import random
 
 def scale_rewards(dataset):
     min_reward = min(dataset['rewards'])
@@ -16,7 +17,7 @@ def scale_rewards(dataset):
 num_t : number of pairs of trajectories
 len_t : length of each trajectory
 """
-def generate_pbrl_dataset(dataset, num_t, pbrl_dataset_file_path="", len_t=16):
+def generate_pbrl_dataset(dataset, num_t, pbrl_dataset_file_path="", len_t=20):
     if pbrl_dataset_file_path != "" and os.path.exists(pbrl_dataset_file_path):
         pbrl_dataset = np.load(pbrl_dataset_file_path)
         print(f"pbrl_dataset loaded successfully from {pbrl_dataset_file_path}")
@@ -46,7 +47,8 @@ def get_random_trajectory_reward(dataset, len_t):
     reward = np.sum(dataset['rewards'][start:start+len_t])
     return traj, reward
 
-def label_by_trajectory_reward(dataset, pbrl_dataset, num_t, len_t=16):
+def label_by_trajectory_reward(dataset, pbrl_dataset, num_t, len_t=20):
+    # double checking
     t1s, t2s, ps = pbrl_dataset
     sampled = np.random.randint(low=0, high=num_t, size=(num_t,))
     t1s_indices = t1s[sampled].flatten()
@@ -100,7 +102,7 @@ pbrl_dataset          : tuple of  (t1s, t2s, p)
 latent_reward_X : (2 * N * num_t * len_t , 23)
 mus : (2 * N * num_t * len_t, 1)
 """
-def make_latent_reward_dataset(dataset, pbrl_dataset, num_t, len_t=16):
+def make_latent_reward_dataset(dataset, pbrl_dataset, num_t, len_t=20):
     t1s, t2s, ps = pbrl_dataset
     indices = torch.randint(high=num_t, size=(num_t,))
     t1s_sample = t1s[indices]
@@ -118,15 +120,15 @@ def make_latent_reward_dataset(dataset, pbrl_dataset, num_t, len_t=16):
     return torch.tensor(latent_reward_X), mus, indices
 
 
-def train_latent(dataset, pbrl_dataset, model_file_path, num_t,
-                 n_epochs = 1000, len_t = 16, patience=5):
+def train_latent(dataset, pbrl_dataset, num_t, len_t,
+                 n_epochs = 1000, patience=5, model_file_path=""):
     X, mus, indices = make_latent_reward_dataset(dataset, pbrl_dataset, num_t=num_t, len_t=len_t)
     dim = dataset['observations'].shape[1] + dataset['actions'].shape[1]
-    if os.path.exists(model_file_path):
-        print(f'model successfully loaded from {model_file_path}')
-        model, epoch = load_model(model_file_path, dim)
-        if epoch + 1 == n_epochs:
-            return model, indices
+    # if os.path.exists(model_file_path):
+    #     print(f'model successfully loaded from {model_file_path}')
+    #     model, epoch = load_model(model_file_path, dim)
+    #     if epoch + 1 == n_epochs:
+    #         return model, indices
     
     assert((num_t * 2 * len_t, dim) == X.shape)
     model = LatentRewardModel(input_dim=dim)
@@ -152,10 +154,11 @@ def train_latent(dataset, pbrl_dataset, model_file_path, num_t,
             if total_loss < best_loss:
                 best_loss = total_loss
                 current_patience = 0
-                torch.save({
-                    'epoch': epoch,
-                    'model_state_dict': model.state_dict(),
-                }, model_file_path)
+                if model_file_path != "":
+                    torch.save({
+                        'epoch': epoch,
+                        'model_state_dict': model.state_dict(),
+                    }, model_file_path)
             else:
                 current_patience += 1
 
@@ -164,7 +167,7 @@ def train_latent(dataset, pbrl_dataset, model_file_path, num_t,
                 break
     return model, indices
 
-def evaluate_latent_model(model, dataset, num_t=10000, len_t = 16):
+def evaluate_latent_model(model, dataset, num_t=10000, len_t = 20):
     with torch.no_grad():
         t1s, t2s, ps = generate_pbrl_dataset(dataset, num_t=num_t)
         X_eval, mu_eval, _ = make_latent_reward_dataset(dataset, (t1s, t2s, ps), num_t)
@@ -205,17 +208,42 @@ def load_model(model_file_path, dim):
     epoch = checkpoint['epoch']
     return model, epoch
 
-# def plot_reward(dataset):
-    # sorted_rewards = np.sort(dataset['rewards'][::1000])
-    # indices = np.arange(len(sorted_rewards))
-    # plt.bar(indices, sorted_rewards, color='blue', alpha=0.7)
-    # plt.title('Sorted Rewards as a Bar Chart')
-    # plt.xlabel('Index')
-    # plt.ylabel('Sorted Rewards')
-    # plt.savefig('reward_plot.png')
-    # print("Number of states:", dataset['terminals'].shape[0])
-    # print("Number of terminal states:", np.sum(dataset['terminals']))
+def plot_reward(dataset):
+    sorted_rewards = np.sort(dataset['rewards'][::1000])
+    indices = np.arange(len(sorted_rewards))
+    plt.bar(indices, sorted_rewards, color='blue', alpha=0.7)
+    plt.title('Sorted Rewards as a Bar Chart')
+    plt.xlabel('Index')
+    plt.ylabel('Sorted Rewards')
+    plt.savefig('reward_plot.png')
+    print("Number of states:", dataset['terminals'].shape[0])
+    print("Number of terminal states:", np.sum(dataset['terminals']))
 
-
-# todo -> implement the batch setting for the 1/-1 method
+def generate_pbrl_dataset_no_overlap(dataset, num_t, len_t, pbrl_dataset_file_path=""):
+    if pbrl_dataset_file_path != "" and os.path.exists(pbrl_dataset_file_path):
+        pbrl_dataset = np.load(pbrl_dataset_file_path)
+        print(f"pbrl_dataset loaded successfully from {pbrl_dataset_file_path}")
+        return (pbrl_dataset['t1s'], pbrl_dataset['t2s'], pbrl_dataset['ps'])
+    else:
+        # assuming no terminal states
+        t1s = np.zeros((num_t, len_t), dtype=int)
+        t2s = np.zeros((num_t, len_t), dtype=int)
+        ps = np.zeros(num_t)
+        starting_indices = list(range(0, len(dataset['observations']), len_t))
+        for i in range(num_t):
+            t1, r1 = pick_and_calc_reward(dataset, starting_indices, len_t)
+            t2, r2 = pick_and_calc_reward(dataset, starting_indices, len_t)
+            
+            p = np.exp(r1) / (np.exp(r1) + np.exp(r2))
+            t1s[i] = t1
+            t2s[i] = t2
+            ps[i] = p
+        np.savez(pbrl_dataset_file_path, t1s=t1s, t2s=t2s, ps=ps)
+        return (t1s, t2s, ps)
     
+def pick_and_calc_reward(dataset, starting_indices, len_t):
+    n0 = random.choice(starting_indices)
+    starting_indices.remove(n0)
+    ns = np.array(np.arange(n0, n0+len_t))
+    r = np.sum(dataset['rewards'][n0:n0+len_t])
+    return ns, r
