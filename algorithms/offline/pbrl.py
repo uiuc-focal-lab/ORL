@@ -51,6 +51,7 @@ def label_by_trajectory_reward(dataset, pbrl_dataset, num_t, len_t=20):
     # double checking
     t1s, t2s, ps = pbrl_dataset
     sampled = np.random.randint(low=0, high=num_t, size=(num_t,))
+    # print(np.max(t1s))
     t1s_indices = t1s[sampled].flatten()
     t2s_indices = t2s[sampled].flatten()
     # t1s_indices = t1s.flatten()
@@ -102,8 +103,9 @@ pbrl_dataset          : tuple of  (t1s, t2s, p)
 latent_reward_X : (2 * N * num_t * len_t , 23)
 mus : (2 * N * num_t * len_t, 1)
 """
-def make_latent_reward_dataset(dataset, pbrl_dataset, num_t, len_t=20):
+def make_latent_reward_dataset(dataset, pbrl_dataset, num_t, len_t=20, num_trials =1):
     t1s, t2s, ps = pbrl_dataset
+    # print(t1s.shape, np.max(t1s))
     indices = torch.randint(high=num_t, size=(num_t,))
     t1s_sample = t1s[indices]
     t2s_sample = t2s[indices]
@@ -116,13 +118,18 @@ def make_latent_reward_dataset(dataset, pbrl_dataset, num_t, len_t=20):
     act_values = acts[indices]
     latent_reward_X = np.concatenate((obs_values, act_values), axis=1)
     
-    mus = torch.bernoulli(torch.from_numpy(ps_sample)).long()
-    return torch.tensor(latent_reward_X), mus, indices
+    mus = torch.zeros_like(torch.from_numpy(ps_sample))
+    for _ in range(num_trials):
+        mus += torch.bernoulli(torch.from_numpy(ps_sample)).long()
+    mus /= num_trials
+    return torch.tensor(latent_reward_X), mus.to(torch.long), indices
 
 
-def train_latent(dataset, pbrl_dataset, num_t, len_t,
+def train_latent(dataset, pbrl_dataset, cross_entropy, num_t, len_t,
                  n_epochs = 1000, patience=5, model_file_path=""):
     X, mus, indices = make_latent_reward_dataset(dataset, pbrl_dataset, num_t=num_t, len_t=len_t)
+    if not cross_entropy:
+        X, mus, indices = make_latent_reward_dataset(dataset, pbrl_dataset, num_t=num_t, len_t=len_t, num_trials=10)
     dim = dataset['observations'].shape[1] + dataset['actions'].shape[1]
     # if os.path.exists(model_file_path):
     #     print(f'model successfully loaded from {model_file_path}')
@@ -133,6 +140,10 @@ def train_latent(dataset, pbrl_dataset, num_t, len_t,
     assert((num_t * 2 * len_t, dim) == X.shape)
     model = LatentRewardModel(input_dim=dim)
     criterion = nn.CrossEntropyLoss()
+    if not cross_entropy:
+        def bernoulli_kl(p_pred, p_true):
+            return torch.sum(p_pred * torch.log(p_pred / p_true) + (1 - p_pred) * torch.log((1-p_pred)/(1-p_true)))
+        criterion = bernoulli_kl
     optimizer = optim.Adam(model.parameters(), lr=0.001)
     best_loss = float('inf')
     current_patience = 0
@@ -223,13 +234,15 @@ def generate_pbrl_dataset_no_overlap(dataset, num_t, len_t, pbrl_dataset_file_pa
     if pbrl_dataset_file_path != "" and os.path.exists(pbrl_dataset_file_path):
         pbrl_dataset = np.load(pbrl_dataset_file_path)
         print(f"pbrl_dataset loaded successfully from {pbrl_dataset_file_path}")
+        # print('max t1', np.max(pbrl_dataset['t1s']))
         return (pbrl_dataset['t1s'], pbrl_dataset['t2s'], pbrl_dataset['ps'])
     else:
         # assuming no terminal states
         t1s = np.zeros((num_t, len_t), dtype=int)
         t2s = np.zeros((num_t, len_t), dtype=int)
         ps = np.zeros(num_t)
-        starting_indices = list(range(0, len(dataset['observations']), len_t))
+        starting_indices = list(range(0, len(dataset['observations'])-len_t+1, len_t))
+        # print(len(starting_indices))
         for i in range(num_t):
             t1, r1 = pick_and_calc_reward(dataset, starting_indices, len_t)
             t2, r2 = pick_and_calc_reward(dataset, starting_indices, len_t)
@@ -242,8 +255,51 @@ def generate_pbrl_dataset_no_overlap(dataset, num_t, len_t, pbrl_dataset_file_pa
         return (t1s, t2s, ps)
     
 def pick_and_calc_reward(dataset, starting_indices, len_t):
+    # print(len(starting_indices))
     n0 = random.choice(starting_indices)
     starting_indices.remove(n0)
     ns = np.array(np.arange(n0, n0+len_t))
     r = np.sum(dataset['rewards'][n0:n0+len_t])
     return ns, r
+
+def small_d4rl_dataset(dataset, n_states):
+    smaller = dataset.copy()
+    smaller['observations'] = smaller['observations'][:n_states]
+    smaller['actions'] = smaller['actions'][:n_states]
+    smaller['next_observations'] = smaller['next_observations'][:n_states]
+    smaller['rewards'] = smaller['rewards'][:n_states]
+    smaller['terminals'] = smaller['terminals'][:n_states]
+    return smaller
+
+
+def label_by_trajectory_reward_multiple_bernoullis(dataset, pbrl_dataset, num_t, len_t=20):
+    # double checking
+    t1s, t2s, ps = pbrl_dataset
+    sampled = np.random.randint(low=0, high=num_t, size=(num_t,))
+    t1s_indices = t1s[sampled].flatten()
+    t2s_indices = t2s[sampled].flatten()
+    # t1s_indices = t1s.flatten()
+    # t2s_indices = t2s.flatten()
+    ps_sample = ps[sampled]
+    mus = multiple_bernoulli_trials_one_neg_one(ps_sample, num_trials=10)
+    repeated_mus = np.repeat(mus, len_t)
+    
+    sampled_dataset = dataset.copy()
+    sampled_dataset['rewards'] = np.array(sampled_dataset['rewards'])
+    sampled_dataset['rewards'][t1s_indices] = repeated_mus
+    sampled_dataset['rewards'][t2s_indices] = -1 * repeated_mus
+
+    all_indices = np.concatenate([t1s_indices, t2s_indices])
+    sampled_dataset['observations'] = sampled_dataset['observations'][all_indices]
+    sampled_dataset['actions'] = sampled_dataset['actions'][all_indices]
+    sampled_dataset['next_observations'] = sampled_dataset['next_observations'][all_indices]
+    sampled_dataset['rewards'] = sampled_dataset['rewards'][all_indices]
+    sampled_dataset['terminals'] = sampled_dataset['terminals'][all_indices]
+
+    return sampled_dataset
+
+def multiple_bernoulli_trials_one_neg_one(p, num_trials):
+    mus = 0
+    for _ in range(num_trials):
+        mus += torch.bernoulli(torch.from_numpy(p)).numpy()
+    return -1 + 2 * (mus / num_trials)
