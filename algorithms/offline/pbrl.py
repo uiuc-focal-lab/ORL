@@ -103,7 +103,7 @@ pbrl_dataset          : tuple of  (t1s, t2s, p)
 latent_reward_X : (2 * N * num_t * len_t , 23)
 mus : (2 * N * num_t * len_t, 1)
 """
-def make_latent_reward_dataset(dataset, pbrl_dataset, num_t, len_t=20, num_trials =1):
+def make_latent_reward_dataset(dataset, pbrl_dataset, num_t, len_t=20, num_trials=1):
     t1s, t2s, ps = pbrl_dataset
     # print(t1s.shape, np.max(t1s))
     indices = torch.randint(high=num_t, size=(num_t,))
@@ -118,32 +118,19 @@ def make_latent_reward_dataset(dataset, pbrl_dataset, num_t, len_t=20, num_trial
     act_values = acts[indices]
     latent_reward_X = np.concatenate((obs_values, act_values), axis=1)
     
-    mus = torch.zeros_like(torch.from_numpy(ps_sample))
-    for _ in range(num_trials):
-        mus += torch.bernoulli(torch.from_numpy(ps_sample)).long()
-    mus /= num_trials
-    return torch.tensor(latent_reward_X), mus.to(torch.long), indices
+    mus = multiple_bernoulli_trials_zero_one(torch.from_numpy(ps_sample), num_trials=num_trials)
+    return torch.tensor(latent_reward_X), mus, indices
 
 
-def train_latent(dataset, pbrl_dataset, cross_entropy, num_t, len_t,
+def train_latent(dataset, pbrl_dataset, multiple_berno, num_t, len_t,
                  n_epochs = 1000, patience=5, model_file_path=""):
-    X, mus, indices = make_latent_reward_dataset(dataset, pbrl_dataset, num_t=num_t, len_t=len_t)
-    if not cross_entropy:
-        X, mus, indices = make_latent_reward_dataset(dataset, pbrl_dataset, num_t=num_t, len_t=len_t, num_trials=10)
+    num_trials = 10 if multiple_berno else 1
+    X, mus, indices = make_latent_reward_dataset(dataset, pbrl_dataset, num_t=num_t, len_t=len_t, num_trials=num_trials)
+    mus = torch.stack([1 - mus, mus], dim=1)
     dim = dataset['observations'].shape[1] + dataset['actions'].shape[1]
-    # if os.path.exists(model_file_path):
-    #     print(f'model successfully loaded from {model_file_path}')
-    #     model, epoch = load_model(model_file_path, dim)
-    #     if epoch + 1 == n_epochs:
-    #         return model, indices
-    
     assert((num_t * 2 * len_t, dim) == X.shape)
     model = LatentRewardModel(input_dim=dim)
     criterion = nn.CrossEntropyLoss()
-    if not cross_entropy:
-        def bernoulli_kl(p_pred, p_true):
-            return torch.sum(p_pred * torch.log(p_pred / p_true) + (1 - p_pred) * torch.log((1-p_pred)/(1-p_true)))
-        criterion = bernoulli_kl
     optimizer = optim.Adam(model.parameters(), lr=0.001)
     best_loss = float('inf')
     current_patience = 0
@@ -299,7 +286,14 @@ def label_by_trajectory_reward_multiple_bernoullis(dataset, pbrl_dataset, num_t,
     return sampled_dataset
 
 def multiple_bernoulli_trials_one_neg_one(p, num_trials):
-    mus = 0
+    p = torch.from_numpy(p)
+    mus = torch.zeros_like(p)
     for _ in range(num_trials):
-        mus += torch.bernoulli(torch.from_numpy(p)).numpy()
+        mus += torch.bernoulli(p).numpy()
     return -1 + 2 * (mus / num_trials)
+
+def multiple_bernoulli_trials_zero_one(p, num_trials):
+    mus = torch.zeros_like(p)
+    for _ in range(num_trials):
+        mus += torch.bernoulli(p)
+    return mus / num_trials
