@@ -126,7 +126,10 @@ def train_latent(dataset, pbrl_dataset, multiple_berno, num_t, len_t,
                  n_epochs = 1000, patience=5, model_file_path=""):
     num_trials = 10 if multiple_berno else 1
     X, mus, indices = make_latent_reward_dataset(dataset, pbrl_dataset, num_t=num_t, len_t=len_t, num_trials=num_trials)
-    mus = torch.stack([1 - mus, mus], dim=1)
+    if multiple_berno:
+        mus = torch.stack([1 - mus, mus], dim=1)
+    if not multiple_berno:
+        mus = mus.long()
     dim = dataset['observations'].shape[1] + dataset['actions'].shape[1]
     assert((num_t * 2 * len_t, dim) == X.shape)
     model = LatentRewardModel(input_dim=dim)
@@ -243,8 +246,12 @@ def generate_pbrl_dataset_no_overlap(dataset, num_t, len_t, pbrl_dataset_file_pa
     
 def pick_and_calc_reward(dataset, starting_indices, len_t):
     # print(len(starting_indices))
-    n0 = random.choice(starting_indices)
-    starting_indices.remove(n0)
+    while True:
+        n0 = random.choice(starting_indices)
+        starting_indices.remove(n0)
+        if np.sum(dataset['terminals'][n0:n0 + len_t - 1]) == 0:
+            break
+
     ns = np.array(np.arange(n0, n0+len_t))
     r = np.sum(dataset['rewards'][n0:n0+len_t])
     return ns, r

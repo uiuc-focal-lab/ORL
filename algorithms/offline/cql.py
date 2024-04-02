@@ -29,7 +29,7 @@ TensorBatch = List[torch.Tensor]
 class TrainConfig:
     # Experiment
     device: str = "cuda"
-    env: str = "halfcheetah-medium-v2"  # OpenAI gym environment name
+    env: str = "walker2d-medium-expert-v2"  # OpenAI gym environment name
     seed: int = 6   # Sets Gym, PyTorch and Numpy seeds
     eval_freq: int = int(5e3)  # How often (time steps) we evaluate
     n_episodes: int = 10  # How many episodes run during evaluation
@@ -76,7 +76,7 @@ class TrainConfig:
     name: str = "CQL"
 
     def __post_init__(self):
-        self.name = f"{self.name}-{self.env}-{'latent_reward_multiple_bernoulli'}"
+        self.name = f"{self.name}-{self.env}-{'(-1/1)_labeling'}"
         if self.checkpoints_path is not None:
             self.checkpoints_path = os.path.join(self.checkpoints_path, self.name)
 
@@ -166,11 +166,11 @@ class ReplayBuffer:
         print(f"Dataset size: {n_transitions}")
 
     def sample(self, batch_size: int) -> TensorBatch:
-        # num_t = 24960
-        # len_t = 20
-        # indices_of_traj = np.random.randint(0, num_t*2, size=batch_size//len_t)
-        # indices = np.array([np.arange(i*len_t, (i+1)*len_t) for i in indices_of_traj]).flatten()
-        indices = np.random.randint(0, min(self._size, self._pointer), size=batch_size)
+        num_t = 48800
+        len_t = 20
+        indices_of_traj = np.random.randint(0, num_t*2, size=batch_size//len_t)
+        indices = np.array([np.arange(i*len_t, (i+1)*len_t) for i in indices_of_traj]).flatten()
+        # indices = np.random.randint(0, min(self._size, self._pointer), size=batch_size)
 
         states = self._states[indices]
         actions = self._actions[indices]
@@ -881,14 +881,15 @@ def train(config: TrainConfig):
 
     # print(len(dataset['rewards']))
     # print(sum(dataset['terminals']))
+    # return
     # dataset = small_d4rl_dataset(dataset=dataset, n_states=200000)
     dataset = scale_rewards(dataset) 
-    num_t = 24960
+    num_t = 48800
     len_t = 20
     pbrl_dataset = generate_pbrl_dataset_no_overlap(dataset, pbrl_dataset_file_path=f'CORL/saved/pbrl_datasets/pbrl_dataset_no_overlap_{config.env}_{num_t}_{len_t}.npz', num_t=num_t, len_t=len_t)
-    latent_reward_model, indices = train_latent(dataset, pbrl_dataset, multiple_berno=True, num_t=num_t, len_t=len_t)
-    dataset = predict_and_label_latent_reward(dataset, latent_reward_model, indices)
-    # dataset = label_by_trajectory_reward(dataset, pbrl_dataset, num_t=num_t)
+    # latent_reward_model, indices = train_latent(dataset, pbrl_dataset, multiple_berno=False, num_t=num_t, len_t=len_t)
+    # dataset = predict_and_label_latent_reward(dataset, latent_reward_model, indices)
+    dataset = label_by_trajectory_reward(dataset, pbrl_dataset, num_t=num_t)
     # dataset = label_by_trajectory_reward_multiple_bernoullis(dataset, pbrl_dataset, num_t=num_t)
 
     replay_buffer.load_d4rl_dataset(dataset)
