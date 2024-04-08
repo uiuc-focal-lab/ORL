@@ -293,13 +293,16 @@ def label_by_trajectory_reward_multiple_bernoullis(dataset, pbrl_dataset, num_t,
     return sampled_dataset
 
 def multiple_bernoulli_trials_one_neg_one(p, num_trials):
-    p = torch.from_numpy(p)
+    if isinstance(p, np.ndarray):
+        p = torch.from_numpy(p)
     mus = torch.zeros_like(p)
     for _ in range(num_trials):
         mus += torch.bernoulli(p).numpy()
     return -1 + 2 * (mus / num_trials)
 
 def multiple_bernoulli_trials_zero_one(p, num_trials):
+    if isinstance(p, np.ndarray):
+        p = torch.from_numpy(p)
     mus = torch.zeros_like(p)
     for _ in range(num_trials):
         mus += torch.bernoulli(p)
