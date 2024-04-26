@@ -47,7 +47,7 @@ def get_random_trajectory_reward(dataset, len_t):
     reward = np.sum(dataset['rewards'][start:start+len_t])
     return traj, reward
 
-def label_by_trajectory_reward(dataset, pbrl_dataset, num_t, len_t=20):
+def label_by_trajectory_reward(dataset, pbrl_dataset, num_t, len_t=20, num_trials=1):
     # double checking
     t1s, t2s, ps = pbrl_dataset
     sampled = np.random.randint(low=0, high=num_t, size=(num_t,))
@@ -58,6 +58,8 @@ def label_by_trajectory_reward(dataset, pbrl_dataset, num_t, len_t=20):
     # t2s_indices = t2s.flatten()
     ps_sample = ps[sampled]
     mus = bernoulli_trial_one_neg_one(ps_sample)
+    if num_trials > 1:
+        mus = multiple_bernoulli_trials_one_neg_one(ps_sample, num_trials=num_trials)
     repeated_mus = np.repeat(mus, len_t)
     
     sampled_dataset = dataset.copy()
@@ -122,13 +124,12 @@ def make_latent_reward_dataset(dataset, pbrl_dataset, num_t, len_t=20, num_trial
     return torch.tensor(latent_reward_X), mus, indices
 
 
-def train_latent(dataset, pbrl_dataset, multiple_berno, num_t, len_t,
+def train_latent(dataset, pbrl_dataset, num_berno, num_t, len_t,
                  n_epochs = 1000, patience=5, model_file_path=""):
-    num_trials = 10 if multiple_berno else 1
-    X, mus, indices = make_latent_reward_dataset(dataset, pbrl_dataset, num_t=num_t, len_t=len_t, num_trials=num_trials)
-    if multiple_berno:
+    X, mus, indices = make_latent_reward_dataset(dataset, pbrl_dataset, num_t=num_t, len_t=len_t, num_trials=num_berno)
+    if num_berno > 1:
         mus = torch.stack([1 - mus, mus], dim=1)
-    if not multiple_berno:
+    else:
         mus = mus.long()
     dim = dataset['observations'].shape[1] + dataset['actions'].shape[1]
     assert((num_t * 2 * len_t, dim) == X.shape)

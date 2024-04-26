@@ -19,6 +19,11 @@ import wandb
 from torch.distributions import Normal
 from torch.optim.lr_scheduler import CosineAnnealingLR
 
+from pbrl import scale_rewards, generate_pbrl_dataset, make_latent_reward_dataset, train_latent, predict_and_label_latent_reward
+from pbrl import label_by_trajectory_reward, generate_pbrl_dataset_no_overlap, small_d4rl_dataset
+from pbrl import label_by_trajectory_reward_multiple_bernoullis
+from ipl_helper import save_preference_dataset
+
 TensorBatch = List[torch.Tensor]
 
 
@@ -29,6 +34,17 @@ LOG_STD_MAX = 2.0
 
 @dataclass
 class TrainConfig:
+    # PBRL
+    num_t: int = 1000
+    len_t: int = 20
+    latent_reward: int = 0
+    bin_label: int = 0
+    bin_label_trajectory_batch: int = 0
+    bin_label_allow_overlap: int = 0
+    num_berno: int = 1
+    out_name: str = ""
+    quick_stop: int = 0
+
     # Experiment
     device: str = "cuda"
     env: str = "halfcheetah-medium-expert-v2"  # OpenAI gym environment name
@@ -58,7 +74,9 @@ class TrainConfig:
     name: str = "IQL"
 
     def __post_init__(self):
-        self.name = f"{self.name}-{self.env}-{str(uuid.uuid4())[:8]}"
+        self.name = f"{self.name}-{self.env}-{'latent_reward'}"
+        if self.out_name:
+            self.name = self.out_name
         if self.checkpoints_path is not None:
             self.checkpoints_path = os.path.join(self.checkpoints_path, self.name)
 
@@ -107,10 +125,16 @@ class ReplayBuffer:
         action_dim: int,
         buffer_size: int,
         device: str = "cpu",
+        bin_label_trajectory_batch: bool = False,
+        num_t: int = 1000,
+        len_t: int = 20,
     ):
         self._buffer_size = buffer_size
         self._pointer = 0
         self._size = 0
+        self._bin_label_trajectory_batch = bin_label_trajectory_batch
+        self._num_t = num_t
+        self._len_t = len_t
 
         self._states = torch.zeros(
             (buffer_size, state_dim), dtype=torch.float32, device=device
@@ -148,7 +172,14 @@ class ReplayBuffer:
         print(f"Dataset size: {n_transitions}")
 
     def sample(self, batch_size: int) -> TensorBatch:
-        indices = np.random.randint(0, min(self._size, self._pointer), size=batch_size)
+        if self._bin_label_trajectory_batch:
+            num_t = self._num_t
+            len_t = self._len_t
+            indices_of_traj = np.random.randint(0, num_t*2, size=batch_size//len_t)
+            indices = np.array([np.arange(i*len_t, (i+1)*len_t) for i in indices_of_traj]).flatten()
+        else:
+            indices = np.random.randint(0, min(self._size, self._pointer), size=batch_size)
+
         states = self._states[indices]
         actions = self._actions[indices]
         rewards = self._rewards[indices]
@@ -543,7 +574,30 @@ def train(config: TrainConfig):
         action_dim,
         config.buffer_size,
         config.device,
+        config.bin_label_trajectory_batch,
+        config.num_t,
+        config.len_t
     )
+
+    if config.latent_reward or config.bin_label:
+        dataset = scale_rewards(dataset)
+        num_t = config.num_t
+        len_t = config.len_t
+        num_trials = config.num_berno
+        if config.latent_reward:
+            pbrl_dataset = generate_pbrl_dataset(dataset, pbrl_dataset_file_path=f'CORL/saved/pbrl_datasets/pbrl_dataset_{config.env}_{num_t}_{len_t}_numTrials={num_trials}.npz', num_t=num_t, len_t=len_t)
+            latent_reward_model, indices = train_latent(dataset, pbrl_dataset, num_berno=num_trials, num_t=num_t, len_t=len_t)
+            dataset = predict_and_label_latent_reward(dataset, latent_reward_model, indices)
+        if config.bin_label:
+            if config.bin_label_allow_overlap:
+                pbrl_dataset = generate_pbrl_dataset(dataset, pbrl_dataset_file_path=f'CORL/saved/pbrl_datasets/pbrl_dataset_{config.env}_{num_t}_{len_t}_numTrials={num_trials}.npz', num_t=num_t, len_t=len_t)
+            else:
+                pbrl_dataset = generate_pbrl_dataset_no_overlap(dataset, pbrl_dataset_file_path=f'CORL/saved/pbrl_datasets/pbrl_dataset_{config.env}_{num_t}_{len_t}_numTrials={num_trials}_noOVLP.npz', num_t=num_t, len_t=len_t)
+            dataset = label_by_trajectory_reward(dataset, pbrl_dataset, num_t=num_t, len_t=len_t, num_trials=num_trials)
+        
+        if config.quick_stop:
+            return
+
     replay_buffer.load_d4rl_dataset(dataset)
 
     max_action = float(env.action_space.high[0])
