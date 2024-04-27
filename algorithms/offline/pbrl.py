@@ -257,8 +257,9 @@ def pick_and_calc_reward(dataset, starting_indices, len_t):
     r = np.sum(dataset['rewards'][n0:n0+len_t])
     return ns, r
 
-def small_d4rl_dataset(dataset, n_states):
+def small_d4rl_dataset(dataset, dataset_size_multiplier=1.0):
     smaller = dataset.copy()
+    n_states = int(dataset_size_multiplier * dataset['observations'].shape[0])
     smaller['observations'] = smaller['observations'][:n_states]
     smaller['actions'] = smaller['actions'][:n_states]
     smaller['next_observations'] = smaller['next_observations'][:n_states]
