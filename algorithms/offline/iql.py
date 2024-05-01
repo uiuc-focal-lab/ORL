@@ -596,10 +596,10 @@ def train(config: TrainConfig):
                 pbrl_dataset = generate_pbrl_dataset_no_overlap(dataset, pbrl_dataset_file_path=f'CORL/saved/pbrl_datasets/pbrl_dataset_{config.env}_{num_t}_{len_t}_numTrials={num_trials}_noOVLP.npz', num_t=num_t, len_t=len_t)
             dataset = label_by_trajectory_reward(dataset, pbrl_dataset, num_t=num_t, len_t=len_t, num_trials=num_trials)
         
-        dataset = small_d4rl_dataset(dataset, dataset_size_multiplier=config.dataset_size_multiplier)
 
         if config.quick_stop:
             return
+    dataset = small_d4rl_dataset(dataset, dataset_size_multiplier=config.dataset_size_multiplier)
 
     replay_buffer.load_d4rl_dataset(dataset)
 
