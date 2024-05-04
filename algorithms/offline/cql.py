@@ -20,7 +20,7 @@ from torch.distributions import Normal, TanhTransform, TransformedDistribution
 
 from pbrl import scale_rewards, generate_pbrl_dataset, make_latent_reward_dataset, train_latent, predict_and_label_latent_reward
 from pbrl import label_by_trajectory_reward, generate_pbrl_dataset_no_overlap, small_d4rl_dataset
-from pbrl import label_by_trajectory_reward_multiple_bernoullis
+from pbrl import label_by_trajectory_reward_multiple_bernoullis, label_by_original_rewards
 from ipl_helper import save_preference_dataset
 
 TensorBatch = List[torch.Tensor]
@@ -34,7 +34,7 @@ class TrainConfig:
     latent_reward: int = 0
     bin_label: int = 0
     bin_label_trajectory_batch: int = 0
-    bin_label_allow_overlap: int = 0
+    bin_label_allow_overlap: int = 1
     num_berno: int = 1
     out_name: str = ""
     quick_stop: int = 0
@@ -905,26 +905,28 @@ def train(config: TrainConfig):
         config.len_t
     )
 
-
-    if config.latent_reward or config.bin_label:
+    num_t = config.num_t
+    len_t = config.len_t
+    num_trials = config.num_berno
+    if config.latent_reward:
         dataset = scale_rewards(dataset)
-        num_t = config.num_t
-        len_t = config.len_t
-        num_trials = config.num_berno
-        if config.latent_reward:
+        pbrl_dataset = generate_pbrl_dataset(dataset, pbrl_dataset_file_path=f'CORL/saved/pbrl_datasets/pbrl_dataset_{config.env}_{num_t}_{len_t}_numTrials={num_trials}.npz', num_t=num_t, len_t=len_t)
+        latent_reward_model, indices = train_latent(dataset, pbrl_dataset, num_berno=num_trials, num_t=num_t, len_t=len_t)
+        dataset = predict_and_label_latent_reward(dataset, latent_reward_model, indices)
+    elif config.bin_label:
+        dataset = scale_rewards(dataset)
+        if config.bin_label_allow_overlap:
             pbrl_dataset = generate_pbrl_dataset(dataset, pbrl_dataset_file_path=f'CORL/saved/pbrl_datasets/pbrl_dataset_{config.env}_{num_t}_{len_t}_numTrials={num_trials}.npz', num_t=num_t, len_t=len_t)
-            latent_reward_model, indices = train_latent(dataset, pbrl_dataset, num_berno=num_trials, num_t=num_t, len_t=len_t)
-            dataset = predict_and_label_latent_reward(dataset, latent_reward_model, indices)
-        if config.bin_label:
-            if config.bin_label_allow_overlap:
-                pbrl_dataset = generate_pbrl_dataset(dataset, pbrl_dataset_file_path=f'CORL/saved/pbrl_datasets/pbrl_dataset_{config.env}_{num_t}_{len_t}_numTrials={num_trials}.npz', num_t=num_t, len_t=len_t)
-            else:
-                pbrl_dataset = generate_pbrl_dataset_no_overlap(dataset, pbrl_dataset_file_path=f'CORL/saved/pbrl_datasets/pbrl_dataset_{config.env}_{num_t}_{len_t}_numTrials={num_trials}_noOVLP.npz', num_t=num_t, len_t=len_t)
-            dataset = label_by_trajectory_reward(dataset, pbrl_dataset, num_t=num_t, len_t=len_t, num_trials=num_trials)
-        
-        if config.quick_stop:
-            return
+        else:
+            pbrl_dataset = generate_pbrl_dataset_no_overlap(dataset, pbrl_dataset_file_path=f'CORL/saved/pbrl_datasets/pbrl_dataset_{config.env}_{num_t}_{len_t}_numTrials={num_trials}_noOVLP.npz', num_t=num_t, len_t=len_t)
+        dataset = label_by_trajectory_reward(dataset, pbrl_dataset, num_t=num_t, len_t=len_t, num_trials=num_trials)
+    else:
+        pbrl_dataset = generate_pbrl_dataset(dataset, pbrl_dataset_file_path=f'CORL/saved/pbrl_datasets/pbrl_dataset_{config.env}_{num_t}_{len_t}_numTrials={num_trials}_noOVLP.npz', num_t=num_t, len_t=len_t)
+        dataset = label_by_original_rewards(dataset, pbrl_dataset, num_t)
     dataset = small_d4rl_dataset(dataset, dataset_size_multiplier=config.dataset_size_multiplier)
+    print(f'Dataset size: {(dataset["observations"]).shape[0]}')
+    if config.quick_stop:
+        return
 
     replay_buffer.load_d4rl_dataset(dataset)
 

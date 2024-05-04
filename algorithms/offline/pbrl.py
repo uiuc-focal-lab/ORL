@@ -312,3 +312,19 @@ def multiple_bernoulli_trials_zero_one(p, num_trials):
     for _ in range(num_trials):
         mus += torch.bernoulli(p)
     return mus / num_trials
+
+def label_by_original_rewards(dataset, pbrl_dataset, num_t):
+    t1s, t2s, _ = pbrl_dataset
+    sampled = np.random.randint(low=0, high=num_t, size=(num_t,))
+    t1s_indices = t1s[sampled].flatten()
+    t2s_indices = t2s[sampled].flatten()
+    
+    sampled_dataset = dataset.copy()
+    all_indices = np.concatenate([t1s_indices, t2s_indices])
+
+    sampled_dataset['observations'] = sampled_dataset['observations'][all_indices]
+    sampled_dataset['actions'] = sampled_dataset['actions'][all_indices]
+    sampled_dataset['next_observations'] = sampled_dataset['next_observations'][all_indices]
+    sampled_dataset['rewards'] = sampled_dataset['rewards'][all_indices]
+    sampled_dataset['terminals'] = sampled_dataset['terminals'][all_indices]
+    return sampled_dataset
