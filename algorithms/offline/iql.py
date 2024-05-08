@@ -40,7 +40,7 @@ class TrainConfig:
     latent_reward: int = 0
     bin_label: int = 0
     bin_label_trajectory_batch: int = 0
-    bin_label_allow_overlap: int = 1
+    bin_label_allow_overlap: int = 0
     num_berno: int = 1
     out_name: str = ""
     quick_stop: int = 0
@@ -570,6 +570,8 @@ def train(config: TrainConfig):
         dataset["next_observations"], state_mean, state_std
     )
     env = wrap_env(env, state_mean=state_mean, state_std=state_std)
+
+    ########################################
     replay_buffer = ReplayBuffer(
         state_dim,
         action_dim,
@@ -580,27 +582,27 @@ def train(config: TrainConfig):
         config.len_t
     )
 
-    ########################################
     num_t = config.num_t
     len_t = config.len_t
     num_trials = config.num_berno
+    file_path = f'CORL/saved/pbrl_datasets_no_ovlp/pbrl_dataset_{config.env}_{num_t}_{len_t}_numTrials={num_trials}'
+    
     if config.latent_reward:
         dataset = scale_rewards(dataset)
-        pbrl_dataset = generate_pbrl_dataset(dataset, pbrl_dataset_file_path=f'CORL/saved/pbrl_datasets/pbrl_dataset_{config.env}_{num_t}_{len_t}_numTrials={num_trials}.npz', num_t=num_t, len_t=len_t)
+        pbrl_dataset = generate_pbrl_dataset_no_overlap(dataset, pbrl_dataset_file_path=file_path, num_t=num_t, len_t=len_t)
         latent_reward_model, indices = train_latent(dataset, pbrl_dataset, num_berno=num_trials, num_t=num_t, len_t=len_t)
         dataset = predict_and_label_latent_reward(dataset, latent_reward_model, indices)
     elif config.bin_label:
         dataset = scale_rewards(dataset)
-        if config.bin_label_allow_overlap:
-            pbrl_dataset = generate_pbrl_dataset(dataset, pbrl_dataset_file_path=f'CORL/saved/pbrl_datasets/pbrl_dataset_{config.env}_{num_t}_{len_t}_numTrials={num_trials}.npz', num_t=num_t, len_t=len_t)
-        else:
-            pbrl_dataset = generate_pbrl_dataset_no_overlap(dataset, pbrl_dataset_file_path=f'CORL/saved/pbrl_datasets_no_ovlp/pbrl_dataset_{config.env}_{num_t}_{len_t}_numTrials={num_trials}', num_t=num_t, len_t=len_t)
+        pbrl_dataset = generate_pbrl_dataset_no_overlap(dataset, pbrl_dataset_file_path=file_path, num_t=num_t, len_t=len_t)
         dataset = label_by_trajectory_reward(dataset, pbrl_dataset, num_t=num_t, len_t=len_t, num_trials=num_trials)
     else:
-        pbrl_dataset = generate_pbrl_dataset(dataset, pbrl_dataset_file_path=f'CORL/saved/pbrl_datasets/pbrl_dataset_{config.env}_{num_t}_{len_t}_numTrials={num_trials}.npz', num_t=num_t, len_t=len_t)
+        pbrl_dataset = generate_pbrl_dataset_no_overlap(dataset, pbrl_dataset_file_path=file_path, num_t=num_t, len_t=len_t)
         dataset = label_by_original_rewards(dataset, pbrl_dataset, num_t)
+        
     dataset = small_d4rl_dataset(dataset, dataset_size_multiplier=config.dataset_size_multiplier)
     print(f'Dataset size: {(dataset["observations"]).shape[0]}')
+    
     if config.quick_stop:
         return
     ########################################
