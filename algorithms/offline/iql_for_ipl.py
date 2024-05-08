@@ -40,10 +40,11 @@ class TrainConfig:
     latent_reward: int = 0
     bin_label: int = 0
     bin_label_trajectory_batch: int = 0
-    bin_label_allow_overlap: int = 0
+    bin_label_allow_overlap: int = 1
     num_berno: int = 1
     out_name: str = ""
     quick_stop: int = 0
+    dataset_size_multiplier: float = 1.0
 
     # Experiment
     device: str = "cuda"
@@ -583,8 +584,8 @@ def train(config: TrainConfig):
     num_t = config.num_t
     len_t = config.len_t
     num_trials = config.num_berno
-    pbrl_dataset = generate_pbrl_dataset_no_overlap(dataset, pbrl_dataset_file_path=f'CORL/saved/pbrl_datasets_no_ovlp/pbrl_dataset_{config.env}_{num_t}_{len_t}_numTrials={num_trials}.npz', num_t=num_t, len_t=len_t)
-    save_preference_dataset(dataset=dataset, dpref=pbrl_dataset, dpref_name=f'{config.env}_{num_t}_{len_t}_numTrials={num_trials}', num_t=num_t, len_t=len_t)        
+    pbrl_dataset = generate_pbrl_dataset(dataset, pbrl_dataset_file_path=f'CORL/saved/pbrl_datasets/pbrl_dataset_{config.env}_{num_t}_{len_t}_numTrials={num_trials}.npz', num_t=num_t, len_t=len_t)
+    save_preference_dataset(dataset=dataset, dpref=pbrl_dataset, dpref_name=f'{config.env}_{num_t}_{len_t}', num_t=num_t, len_t=len_t, multiplier=config.dataset_size_multiplier)        
     return
 
     replay_buffer.load_d4rl_dataset(dataset)
