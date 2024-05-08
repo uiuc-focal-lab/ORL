@@ -579,19 +579,12 @@ def train(config: TrainConfig):
         config.len_t
     )
 
-    if config.latent_reward or config.bin_label:
-        dataset = scale_rewards(dataset)
-        num_t = config.num_t
-        len_t = config.len_t
-        num_trials = config.num_berno
-        if config.bin_label:
-            if config.bin_label_allow_overlap:
-                pbrl_dataset = generate_pbrl_dataset(dataset, pbrl_dataset_file_path=f'CORL/saved/pbrl_datasets/pbrl_dataset_{config.env}_{num_t}_{len_t}_numTrials={num_trials}.npz', num_t=num_t, len_t=len_t)
-            else:
-                pbrl_dataset = generate_pbrl_dataset_no_overlap(dataset, pbrl_dataset_file_path=f'CORL/saved/pbrl_datasets/pbrl_dataset_{config.env}_{num_t}_{len_t}_numTrials={num_trials}_noOVLP.npz', num_t=num_t, len_t=len_t)
-            save_preference_dataset(dataset=dataset, dpref=pbrl_dataset, dpref_name=f'{config.env}_{num_t}_{len_t}_numTrials={num_trials}', num_t=num_t, len_t=len_t)
-            dataset = label_by_trajectory_reward(dataset, pbrl_dataset, num_t=num_t, len_t=len_t, num_trials=num_trials)
-        
+    dataset = scale_rewards(dataset)
+    num_t = config.num_t
+    len_t = config.len_t
+    num_trials = config.num_berno
+    pbrl_dataset = generate_pbrl_dataset_no_overlap(dataset, pbrl_dataset_file_path=f'CORL/saved/pbrl_datasets_no_ovlp/pbrl_dataset_{config.env}_{num_t}_{len_t}_numTrials={num_trials}.npz', num_t=num_t, len_t=len_t)
+    save_preference_dataset(dataset=dataset, dpref=pbrl_dataset, dpref_name=f'{config.env}_{num_t}_{len_t}_numTrials={num_trials}', num_t=num_t, len_t=len_t)        
     return
 
     replay_buffer.load_d4rl_dataset(dataset)
