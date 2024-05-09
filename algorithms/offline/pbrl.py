@@ -241,6 +241,8 @@ def generate_pbrl_dataset_no_overlap(dataset, num_t, len_t, pbrl_dataset_file_pa
             t2, r2 = pick_and_calc_reward(dataset, starting_indices, len_t)
             
             p = np.exp(r1) / (np.exp(r1) + np.exp(r2))
+            if np.isnan(p):
+                p = float(r1 > r2)
             t1s[i] = t1
             t2s[i] = t2
             ps[i] = p
