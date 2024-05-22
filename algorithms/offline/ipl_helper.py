@@ -1,5 +1,5 @@
 import numpy as np
-from pbrl import multiple_bernoulli_trials_zero_one
+from pbrl import multiple_bernoulli_trials_zero_one, small_d4rl_dataset
 
 def save_preference_dataset(dataset, dpref, dpref_name, num_t, len_t, multiplier):
     t1s, t2s, ps = dpref

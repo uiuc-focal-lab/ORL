@@ -26,12 +26,29 @@ from flax.core import FrozenDict
 from flax.training.train_state import TrainState
 from tqdm.auto import trange
 
+from pbrl import scale_rewards, generate_pbrl_dataset, make_latent_reward_dataset, train_latent, predict_and_label_latent_reward
+from pbrl import label_by_trajectory_reward, generate_pbrl_dataset_no_overlap, small_d4rl_dataset
+from pbrl import label_by_trajectory_reward_multiple_bernoullis, label_by_original_rewards
+from ipl_helper import save_preference_dataset
+
 default_kernel_init = nn.initializers.lecun_normal()
 default_bias_init = nn.initializers.zeros
 
 
 @dataclass
 class Config:
+    # PBRL
+    num_t: int = 1000
+    len_t: int = 20
+    latent_reward: int = 0
+    bin_label: int = 0
+    bin_label_trajectory_batch: int = 0
+    bin_label_allow_overlap: int = 1
+    num_berno: int = 1
+    out_name: str = ""
+    quick_stop: int = 0
+    dataset_size_multiplier: float = 1.0
+
     # wandb params
     project: str = "CORL"
     group: str = "rebrac"
@@ -68,6 +85,8 @@ class Config:
 
     def __post_init__(self):
         self.name = f"{self.name}-{self.dataset_name}-{str(uuid.uuid4())[:8]}"
+        if self.out_name:
+            self.name = self.out_name
 
 
 def pytorch_init(fan_in: float) -> Callable:
@@ -606,6 +625,7 @@ def main(config: Config):
     )
     wandb.mark_preempting()
     buffer = ReplayBuffer()
+    ########################################
     buffer.create_from_d4rl(
         config.dataset_name, config.normalize_reward, config.normalize_states
     )

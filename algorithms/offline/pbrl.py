@@ -30,9 +30,11 @@ def generate_pbrl_dataset(dataset, num_t, pbrl_dataset_file_path="", len_t=20):
             t1, r1 = get_random_trajectory_reward(dataset, len_t)
             t2, r2 = get_random_trajectory_reward(dataset, len_t)
             
-            p = np.exp(r1) / (np.exp(r1) + np.exp(r2))
-            if np.isnan(p):
-                p = float(r1 > r2)
+            one_over_p = 1.0 + np.exp(r2 - r1)
+            if np.isnan(one_over_p):
+                p = 0.0
+            else:
+                p = 1.0 / one_over_p
             t1s[i] = t1
             t2s[i] = t2
             ps[i] = p
