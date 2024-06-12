@@ -1,6 +1,6 @@
 # Optimal Reward Labeling
 
-This repository is based heavily on the [CORL library](https://github.com/tinkoff-ai/CORL).
+This repository is based on the [CORL library](https://github.com/tinkoff-ai/CORL).
 
 ## Installation
 
@@ -14,6 +14,7 @@ pip install -r requirements/requirements_dev.txt
 ```
 
 ## Initialize Wandb
+
 Initialize Wandb by running the following command inside the folder:
 
 ```bash
@@ -24,7 +25,8 @@ Follow the prompts to create a new project or connect to an existing one. Make s
 
 For more information on how to use Wandb, refer to the [Wandb documentation](https://docs.wandb.ai/).
 
-## Run example scripts
+## Run Example
+
 Run the sample Python command. Make sure you have the necessary dependencies installed and the Python environment properly configured.
 
 ```bash
@@ -49,3 +51,25 @@ Execute these scripts in your terminal:
 ```bash
 . abl.sh
 ```
+
+## Experiment Results
+
+### Main Experiments
+
+This graph shows the comparison between different reward labeling methods: Oracle True Reward, ORL, Latent Reward Model, and IPL with True Reward.
+
+![Graph 1](results/graphs/main_exp.png)
+
+### Ablation Studies
+
+This graph demonstrates the impact of using datasets of different sizes on the performance of the reward labeling method.
+
+![Graph 2](results/graphs/size.png)
+
+This graph illustrates the performance of the reward labeling method when different Offline RL algorithms are applied.
+
+![Graph 3](results/graphs/algo.png)
+
+This graph showcases the effect of performing multiple Bernoulli samples to generate preference labels on the performance of the reward labeling method.
+
+![Graph 4](results/graphs/bernoulli.png)
