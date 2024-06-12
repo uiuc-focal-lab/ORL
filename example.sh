@@ -1,0 +1,1 @@
+python algorithms/offline/cql.py --project "Experiments_CORL" --env "halfcheetah-medium-expert-v2" --out_name "cql-halfcheetah-medium-expert-latent_reward"          --num_t 49920  --len_t 20 --latent_reward 1 --bin_label 0 --seed 0 --bin_label_allow_overlap 1

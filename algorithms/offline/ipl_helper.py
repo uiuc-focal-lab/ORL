@@ -42,10 +42,10 @@ def save_preference_dataset(dataset, dpref, dpref_name, num_t, len_t, multiplier
     }
     
     if multiplier == 1.0:
-        np.savez(f'CORL/saved/ipl_datasets/{dpref_name}.npz', **sampled_out)
+        np.savez(f'saved/ipl_datasets/{dpref_name}.npz', **sampled_out)
     else:
-        np.savez(f'CORL/saved/ipl_datasets/{dpref_name}-{str(multiplier)}.npz', **sampled_out)
+        np.savez(f'saved/ipl_datasets/{dpref_name}-{str(multiplier)}.npz', **sampled_out)
 
-    print(f'Saved preference dataset to CORL/saved/ipl_datasets/{dpref_name}')
+    print(f'Saved preference dataset to saved/ipl_datasets/{dpref_name}')
     print(f'Shape of obs_1: {out["obs_1"].shape}')
     print(f'Shape of labels: {out["label"].shape}')
