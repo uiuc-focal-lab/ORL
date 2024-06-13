@@ -56,20 +56,20 @@ Execute these scripts in your terminal:
 
 ### Main Experiments
 
-This graph shows the comparison between different reward labeling methods: Oracle True Reward, ORL, Latent Reward Model, and IPL with True Reward.
+Training log of learning with different methods on different datasets: Oracle True Reward, ORL, Latent Reward Model, and IPL with True Reward
 
 ![Graph 1](results/graphs/main_exp.png)
 
 ### Ablation Studies
 
-This graph demonstrates the impact of using datasets of different sizes on the performance of the reward labeling method.
+raining log of learning with a method on datasets of different sizes
 
 ![Graph 2](results/graphs/size.png)
 
-This graph illustrates the performance of the reward labeling method when different Offline RL algorithms are applied.
+Comparison between the learning efficiency of ORL combined with different standard offline RL algorithms
 
 ![Graph 3](results/graphs/algo.png)
 
-This graph showcases the effect of performing multiple Bernoulli samples to generate preference labels on the performance of the reward labeling method.
+Comparison between the cases where single or multiple preference labels are given to each pair of trajectories
 
 ![Graph 4](results/graphs/bernoulli.png)
