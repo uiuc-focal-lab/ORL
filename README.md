@@ -62,7 +62,7 @@ Training log of learning with different methods on different datasets: Oracle Tr
 
 ### Ablation Studies
 
-raining log of learning with a method on datasets of different sizes
+Training log of learning with a method on datasets of different sizes
 
 ![Graph 2](results/graphs/size.png)
 
