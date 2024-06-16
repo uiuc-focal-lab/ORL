@@ -9,7 +9,7 @@ Set up and install the d4rl environments by following the instructions provided 
 Clone the GitHub repository and install required packages:
 
 ```bash
-git clone https://github.com/davidzhu27/ORL.git && cd ORL
+git clone https://github.com/uiuc-focal-lab/ORL.git && cd ORL
 pip install -r requirements/requirements_dev.txt
 ```
 
