@@ -25,6 +25,15 @@ Follow the prompts to create a new project or connect to an existing one. Make s
 
 For more information on how to use Wandb, refer to the [Wandb documentation](https://docs.wandb.ai/).
 
+## Generate Preference Datasets
+
+Run the shell files. They will be written into the `saved` folder.
+
+```bash
+. generate_pbrl_datasets.sh
+. generate_pbrl_datasets_no_overlap.sh
+
+```
 ## Run Example
 
 Run the sample Python command. Make sure you have the necessary dependencies installed and the Python environment properly configured.
@@ -32,7 +41,6 @@ Run the sample Python command. Make sure you have the necessary dependencies ins
 ```bash
 . example.sh
 ```
-
 ## Full Experiment and Ablation Study Scripts
 
 To run the full experiment and ablation study, use the following scripts:
