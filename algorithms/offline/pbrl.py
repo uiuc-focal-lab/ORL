@@ -40,7 +40,7 @@ def generate_pbrl_dataset(dataset, num_t, pbrl_dataset_file_path="", len_t=20):
             t2s[i] = t2
             ps[i] = p
         np.savez(pbrl_dataset_file_path, t1s=t1s, t2s=t2s, ps=ps)
-        # print(f"saving trajectories...")
+        print(f"saving trajectories...")
         return (t1s, t2s, ps)
 
 def get_random_trajectory_reward(dataset, len_t):
@@ -53,60 +53,39 @@ def get_random_trajectory_reward(dataset, len_t):
     return traj, reward
 
 def label_by_trajectory_reward(dataset, pbrl_dataset, num_t, len_t=20, num_trials=1):
-    # double checking
+    print('labeling with binary reward...')
     t1s, t2s, ps = pbrl_dataset
-    sampled = np.random.randint(low=0, high=num_t, size=(num_t,))
-    # print(np.max(t1s))
-    t1s_indices = t1s[sampled].flatten()
-    t2s_indices = t2s[sampled].flatten()
-    # t1s_indices = t1s.flatten()
-    # t2s_indices = t2s.flatten()
-    ps_sample = ps[sampled]
-    mus = bernoulli_trial_one_neg_one(ps_sample)
+    t1s_indices = t1s.flatten()
+    t2s_indices = t2s.flatten()
+    mus = bernoulli_trial_one_neg_one(ps)
     if num_trials > 1:
-        mus = multiple_bernoulli_trials_one_neg_one(ps_sample, num_trials=num_trials)
+        mus = multiple_bernoulli_trials_one_neg_one(ps, num_trials=num_trials)
     repeated_mus = np.repeat(mus, len_t)
-    
-    sampled_dataset = dataset.copy()
-    sampled_dataset['rewards'] = np.array(sampled_dataset['rewards'])
+    new_dataset = dataset.copy()
+    new_dataset['rewards'] = np.zeros_like(dataset['rewards'])
 
-    # take average for repeated trajectories
+    # take average in case of repeated trajectories
     index_count = {}
     for i in range(len(t1s_indices)):
         t1s_index = t1s_indices[i]
         t2s_index = t2s_indices[i]
         index_count[t1s_index] = index_count.get(t1s_index, 0) + 1
         index_count[t2s_index] = index_count.get(t2s_index, 0) + 1
-        
+
     for i in range(len(t1s_indices)):
         t1s_index = t1s_indices[i]
         t2s_index = t2s_indices[i]
-        sampled_dataset['rewards'][t1s_index] += repeated_mus[i] / index_count[t1s_index]
-        sampled_dataset['rewards'][t2s_index] += -1 * repeated_mus[i] / index_count[t2s_index]
-    
+        new_dataset['rewards'][t1s_index] += repeated_mus[i] / index_count[t1s_index]
+        new_dataset['rewards'][t2s_index] += -1 * repeated_mus[i] / index_count[t2s_index]
 
     all_indices = np.concatenate([t1s_indices, t2s_indices])
-    sampled_dataset['observations'] = sampled_dataset['observations'][all_indices]
-    sampled_dataset['actions'] = sampled_dataset['actions'][all_indices]
-    sampled_dataset['next_observations'] = sampled_dataset['next_observations'][all_indices]
-    sampled_dataset['rewards'] = sampled_dataset['rewards'][all_indices]
-    sampled_dataset['terminals'] = sampled_dataset['terminals'][all_indices]
+    new_dataset['observations'] = new_dataset['observations'][all_indices]
+    new_dataset['actions'] = new_dataset['actions'][all_indices]
+    new_dataset['next_observations'] = new_dataset['next_observations'][all_indices]
+    new_dataset['rewards'] = new_dataset['rewards'][all_indices]
+    new_dataset['terminals'] = new_dataset['terminals'][all_indices]
 
-    # count_one = 0
-    # count_neg_one = 0
-    # count_zero = 0
-    # for i in sampled_dataset['rewards']:
-    #     if i == 1:
-    #         count_one += 1
-    #     elif i == -1:
-    #         count_neg_one += 1
-    #     else:
-    #         count_zero += 1
-    # print("COUNT OF REWARD 1", count_one)
-    # print("COUNT OF REWARD -1", count_neg_one)
-    # print("COUNT OF REWARD 0", count_zero)
-    print(sampled_dataset['rewards'][:30])
-    return sampled_dataset
+    return new_dataset
 
 def bernoulli_trial_one_neg_one(p):
     mus = torch.bernoulli(torch.from_numpy(p)).numpy()
@@ -141,7 +120,6 @@ output:
 """
 def make_latent_reward_dataset(dataset, pbrl_dataset, num_t, len_t=20, num_trials=1):
     t1s, t2s, ps = pbrl_dataset
-    # print(t1s.shape, np.max(t1s))
     indices = torch.randint(high=num_t, size=(num_t,))
     t1s_sample = t1s[indices]
     t2s_sample = t2s[indices]
@@ -301,22 +279,19 @@ def generate_pbrl_dataset_no_overlap(dataset, num_t, len_t, reuse_fraction=0.0, 
     if pbrl_dataset_file_path != "" and os.path.exists(pbrl_dataset_file_path):
         pbrl_dataset = np.load(pbrl_dataset_file_path)
         print(f"pbrl_dataset loaded successfully from {pbrl_dataset_file_path}")
-        # print('max t1', np.max(pbrl_dataset['t1s']))
         return (pbrl_dataset['t1s'], pbrl_dataset['t2s'], pbrl_dataset['ps'])
     else:
-        # assuming no terminal states
         t1s = np.zeros((num_t, len_t), dtype=int)
         t2s = np.zeros((num_t, len_t), dtype=int)
         ps = np.zeros(num_t)
         starting_indices = list(range(0, len(dataset['observations'])-len_t+1, len_t))
-        # print(len(starting_indices))
-        num_reuse = int(num_t * reuse_fraction * reuse_times)
+        num_reuse = int(num_t * reuse_fraction)
         starting_indices_to_reuse = np.random.choice(starting_indices, num_reuse, replace=False)
         starting_indices_to_reuse = list(np.repeat(starting_indices_to_reuse, reuse_times))
         starting_indices_not_to_reuse = [x for x in starting_indices if x not in starting_indices_to_reuse]
 
         for i in range(num_t):
-            if i < num_reuse:
+            if len(starting_indices_to_reuse):
                 t1, r1 = pick_and_calc_reward(dataset, starting_indices_to_reuse, len_t)
             else:
                 t1, r1 = pick_and_calc_reward(dataset, starting_indices_not_to_reuse, len_t)
@@ -333,7 +308,6 @@ def generate_pbrl_dataset_no_overlap(dataset, num_t, len_t, reuse_fraction=0.0, 
         return (t1s, t2s, ps)
     
 def pick_and_calc_reward(dataset, starting_indices, len_t):
-    # print(len(starting_indices))
     while True:
         n0 = random.choice(starting_indices)
         starting_indices.remove(n0)
