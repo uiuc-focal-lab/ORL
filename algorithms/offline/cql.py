@@ -231,6 +231,7 @@ def wandb_init(config: dict) -> None:
         group=config["group"],
         name=config["name"],
         id=str(uuid.uuid4()),
+        mode='offline'
     )
     wandb.run.save()
 
@@ -914,18 +915,19 @@ def train(config: TrainConfig):
     allow_overlap=config.bin_label_allow_overlap
     reuse_fraction = config.reuse_fraction
     reuse_times = config.reuse_times
+    name = config.out_name + '-' + str(config.seed)
 
     if config.latent_reward:
         dataset = scale_rewards(dataset)
         pbrl_dataset = pick_and_generate_pbrl_dataset(dataset=dataset, env = config.env, num_t=num_t, len_t=len_t, num_trials=num_trials, 
                                                     allow_overlap=allow_overlap, reuse_fraction=reuse_fraction, reuse_times=reuse_times)
-        latent_reward_model, indices = train_latent(dataset, pbrl_dataset, num_berno=num_trials, num_t=num_t, len_t=len_t)
+        latent_reward_model, indices = train_latent(dataset, pbrl_dataset, num_berno=num_trials, num_t=num_t, len_t=len_t, name=name)
         dataset = predict_and_label_latent_reward(dataset, latent_reward_model, indices)
     elif config.bin_label:
         dataset = scale_rewards(dataset)
         pbrl_dataset = pick_and_generate_pbrl_dataset(dataset=dataset, env = config.env, num_t=num_t, len_t=len_t, num_trials=num_trials, 
                                                     allow_overlap=allow_overlap, reuse_fraction=reuse_fraction, reuse_times=reuse_times)
-        dataset = label_by_trajectory_reward(dataset, pbrl_dataset, num_t=num_t, len_t=len_t, num_trials=num_trials)
+        dataset = label_by_trajectory_reward(dataset, pbrl_dataset, num_t=num_t, len_t=len_t, num_trials=num_trials, name=name)
     else:
         pbrl_dataset = pick_and_generate_pbrl_dataset(dataset=dataset, env = config.env, num_t=num_t, len_t=len_t, num_trials=num_trials, 
                                                     allow_overlap=allow_overlap, reuse_fraction=reuse_fraction, reuse_times=reuse_times)

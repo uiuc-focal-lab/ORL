@@ -6,6 +6,7 @@ from sklearn.metrics import accuracy_score
 import os
 import matplotlib.pyplot as plt
 import random
+import pandas as pd
 
 def scale_rewards(dataset):
     min_reward = min(dataset['rewards'])
@@ -52,7 +53,7 @@ def get_random_trajectory_reward(dataset, len_t):
     reward = np.sum(dataset['rewards'][start:start+len_t])
     return traj, reward
 
-def label_by_trajectory_reward(dataset, pbrl_dataset, num_t, len_t=20, num_trials=1):
+def label_by_trajectory_reward(dataset, pbrl_dataset, num_t, len_t=20, num_trials=1, name=None):
     print('labeling with binary reward...')
     t1s, t2s, ps = pbrl_dataset
     t1s_indices = t1s.flatten()
@@ -63,6 +64,16 @@ def label_by_trajectory_reward(dataset, pbrl_dataset, num_t, len_t=20, num_trial
     repeated_mus = np.repeat(mus, len_t)
     new_dataset = dataset.copy()
     new_dataset['rewards'] = np.zeros_like(dataset['rewards'])
+
+    preferred_indices = torch.zeros((num_t * len_t,), dtype=int)
+    rejected_indices = torch.zeros((num_t * len_t,), dtype=int)
+    for i in range(num_t * len_t):
+        if repeated_mus[i] >= 0.5:
+            preferred_indices[i] = t1s_indices[i]
+            rejected_indices[i] = t2s_indices[i]
+        else:
+            preferred_indices[i] = t2s_indices[i]
+            rejected_indices[i] = t1s_indices[i]
 
     # take average in case of repeated trajectories
     index_count = {}
@@ -85,6 +96,15 @@ def label_by_trajectory_reward(dataset, pbrl_dataset, num_t, len_t=20, num_trial
     new_dataset['rewards'] = new_dataset['rewards'][all_indices]
     new_dataset['terminals'] = new_dataset['terminals'][all_indices]
 
+    rewards = np.array(dataset['rewards'])
+    rewards[all_indices] = np.array(new_dataset['rewards'])
+    preferred_rewards = rewards[preferred_indices]
+    sampled_preferred_rewards = preferred_rewards[torch.randperm(len(preferred_rewards))[:10000]]
+    rejected_rewards = rewards[rejected_indices]
+    sampled_rejected_rewards = rejected_rewards[torch.randperm(len(rejected_rewards))[:10000]]
+    if name:
+        df = pd.DataFrame({'preferred_reward': sampled_preferred_rewards, 'rejected_reward': sampled_rejected_rewards})
+        df.to_csv(f'saved/sampled_rewards/{name}.csv', index=False)
     return new_dataset
 
 def bernoulli_trial_one_neg_one(p):
@@ -146,7 +166,7 @@ def make_latent_reward_dataset(dataset, pbrl_dataset, num_t, len_t=20, num_trial
     return torch.tensor(latent_reward_X), mus, indices, preferred_indices.view(-1), rejected_indices.view(-1)
 
 
-def train_latent(dataset, pbrl_dataset, num_berno, num_t, len_t,
+def train_latent(dataset, pbrl_dataset, num_berno, num_t, len_t, name,
                  n_epochs = 200, patience=5, model_file_path=""):
     X, mus, indices, preferred_indices, rejected_indices = make_latent_reward_dataset(dataset, pbrl_dataset, num_t=num_t, len_t=len_t, num_trials=num_berno)
     dim = dataset['observations'].shape[1] + dataset['actions'].shape[1]
@@ -156,7 +176,9 @@ def train_latent(dataset, pbrl_dataset, num_berno, num_t, len_t,
     optimizer = optim.Adam(model.parameters(), lr=0.001)
     best_loss = float('inf')
     current_patience = 0
-
+    pref_r_sample = None
+    rejt_r_sample = None
+    
     print('training...')
     for epoch in range(n_epochs):
         total_loss = 0.0
@@ -171,7 +193,7 @@ def train_latent(dataset, pbrl_dataset, num_berno, num_t, len_t,
         if (epoch+1) % 25 == 0:
             print(f'Epoch {epoch + 1}/{n_epochs}, Total Loss: {total_loss}')
             training_data = (X, mus)
-            evaluate_latent_model(model, dataset, training_data, num_t=num_t, preferred_indices=preferred_indices, rejected_indices=rejected_indices)
+            pref_r_sample, rejt_r_sample = evaluate_latent_model(model, dataset, training_data, num_t=num_t, preferred_indices=preferred_indices, rejected_indices=rejected_indices)
             if total_loss < best_loss:
                 best_loss = total_loss
                 current_patience = 0
@@ -186,6 +208,9 @@ def train_latent(dataset, pbrl_dataset, num_berno, num_t, len_t,
             if current_patience >= patience:
                 print(f'early stopping after {epoch + 1} epochs without improvement.')
                 break
+    if pref_r_sample is not None:
+        df = pd.DataFrame({'preferred_reward': pref_r_sample.numpy(), 'rejected_reward': rejt_r_sample.numpy()})
+        df.to_csv(f'saved/sampled_rewards/{name}.csv', index=False)
     return model, indices
 
 def evaluate_latent_model(model, dataset, training_data, num_t, preferred_indices, rejected_indices, testing_num_t=1000, len_t=20):
@@ -225,7 +250,9 @@ def evaluate_latent_model(model, dataset, training_data, num_t, preferred_indice
         preferred_act_values = dataset['actions'][preferred_indices]
         true_preferred_rewards = real_rewards[preferred_indices]
         preferred_training_data = np.concatenate((preferred_obs_values, preferred_act_values), axis=1)
-        expected_preferred_reward = torch.mean(model(torch.tensor(preferred_training_data)).view(-1))
+        preferred_rewards = model(torch.tensor(preferred_training_data)).view(-1)
+        sampled_preferred_rewards = preferred_rewards[torch.randperm(len(preferred_rewards))[:10000]]
+        expected_preferred_reward = torch.mean(sampled_preferred_rewards)
         print(f"Expected Reward for preferred (s,a) pairs in the training set: {expected_preferred_reward}")
         print(f"True     Reward for preferred (s,a) pairs in the training set: {np.mean(true_preferred_rewards)}")
 
@@ -234,9 +261,13 @@ def evaluate_latent_model(model, dataset, training_data, num_t, preferred_indice
         rejected_act_values = dataset['actions'][rejected_indices]
         true_rejected_rewards = real_rewards[rejected_indices]
         rejected_training_data = np.concatenate((rejected_obs_values, rejected_act_values), axis=1)
-        expected_rejected_reward = torch.mean(model(torch.tensor(rejected_training_data)).view(-1))
+        rejected_rewards = model(torch.tensor(rejected_training_data)).view(-1)
+        sampled_rejected_rewards = rejected_rewards[torch.randperm(len(rejected_rewards))[:10000]]
+        expected_rejected_reward = torch.mean(sampled_rejected_rewards)
         print(f"Expected Reward for rejected  (s,a) pairs in the training set: {expected_rejected_reward}")
         print(f"True     Reward for rejected  (s,a) pairs in the training set: {np.mean(true_rejected_rewards)}")
+
+        return sampled_preferred_rewards, sampled_rejected_rewards
 
 def predict_and_label_latent_reward(dataset, latent_reward_model, indices):
     with torch.no_grad():
