@@ -17,7 +17,7 @@ python algorithms/offline/cql.py --env "walker2d-medium-v2"        --out_name "w
 # hopper
 
 # single bernoulli
-python algorithms/offline/cql.py --env "hopper-medium-expert-v2" --out_name "hopper-medium-expert"   --len_t 20 --latent_reward 0 --bin_label 1 --num_berno 1  --bin_label_trajectory_batch 0 --bin_label_allow_overlap 1 --seed $seed --quick_stop 1
+python algorithms/offline/cql.py --env "hopper-medium-expert-v2" --out_name "hopper-medium-expert" --num_t 48800 --len_t 20 --latent_reward 0 --bin_label 1 --num_berno 1  --bin_label_trajectory_batch 0 --bin_label_allow_overlap 1 --seed $seed --quick_stop 1
 python algorithms/offline/cql.py --env "hopper-medium-replay-v2" --out_name "hopper-medium-replay" --num_t 9000  --len_t 20 --latent_reward 0 --bin_label 1 --num_berno 1  --bin_label_trajectory_batch 0 --bin_label_allow_overlap 1 --seed $seed --quick_stop 1
 python algorithms/offline/cql.py --env "hopper-medium-v2"        --out_name "hopper-medium"        --num_t 23000 --len_t 20 --latent_reward 0 --bin_label 1 --num_berno 1  --bin_label_trajectory_batch 0 --bin_label_allow_overlap 1 --seed $seed --quick_stop 1
 

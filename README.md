@@ -81,3 +81,7 @@ Comparison between the learning efficiency of ORL combined with different standa
 Comparison between the cases where single or multiple preference labels are given to each pair of trajectories
 
 ![Graph 4](results/graphs/bernoulli.png)
+
+Comparison between datasets with different settings of structured overlapping trajectories
+
+![Graph 4](results/graphs/struc_overlap.png)
