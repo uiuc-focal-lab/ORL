@@ -34,7 +34,7 @@ class TrainConfig:
     latent_reward: int = 0
     bin_label: int = 0
     bin_label_trajectory_batch: int = 0
-    bin_label_allow_overlap: int = 1
+    bin_label_allow_overlap: int = 0
     num_berno: int = 1
     out_name: str = ""
     quick_stop: int = 0

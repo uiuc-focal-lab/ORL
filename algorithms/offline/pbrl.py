@@ -17,7 +17,7 @@ def scale_rewards(dataset):
     dataset['rewards'] = [-1 + 2 * (x - min_reward) / (max_value - min_reward) for x in dataset['rewards']]
     return dataset
 
-def generate_pbrl_dataset(dataset, num_t, pbrl_dataset_file_path="", len_t=20):
+def generate_pbrl_dataset(dataset, num_t, pbrl_dataset_file_path="", random_multiplier=0.8, len_t=20):
     # Generates a PBRL dataset with pairs of trajectories and the probability of preferring the first trajectory.
     if pbrl_dataset_file_path != "" and os.path.exists(pbrl_dataset_file_path):
         pbrl_dataset = np.load(pbrl_dataset_file_path)
@@ -27,10 +27,21 @@ def generate_pbrl_dataset(dataset, num_t, pbrl_dataset_file_path="", len_t=20):
         t1s = np.zeros((num_t, len_t), dtype=int)
         t2s = np.zeros((num_t, len_t), dtype=int)
         ps = np.zeros(num_t)
-        for i in range(num_t):
-            t1, r1 = get_random_trajectory_reward(dataset, len_t)
-            t2, r2 = get_random_trajectory_reward(dataset, len_t)
+        start_right = len_t
+        start_left = 0
+        # for i in range(num_t):
+        #     t1, r1 = get_random_trajectory_reward(dataset, len_t)
+        #     t2, r2 = get_random_trajectory_reward(dataset, len_t)
             
+        #     p = np.exp(r1) / (np.exp(r1) + np.exp(r2))
+        #     if np.isnan(p):
+        #         p = float(r1 > r2)
+        #     t1s[i] = t1
+        #     t2s[i] = t2
+        #     ps[i] = p
+        for i in range(num_t):
+            t1, r1, start_left, start_right = get_random_trajectory_reward_with_less_overlap(dataset, len_t, random_multiplier, start_left, start_right)
+            t2, r2, start_left, start_right = get_random_trajectory_reward_with_less_overlap(dataset, len_t, random_multiplier, start_left, start_right)
             p = np.exp(r1) / (np.exp(r1) + np.exp(r2))
             if np.isnan(p):
                 p = float(r1 > r2)
@@ -40,6 +51,21 @@ def generate_pbrl_dataset(dataset, num_t, pbrl_dataset_file_path="", len_t=20):
         np.savez(pbrl_dataset_file_path, t1s=t1s, t2s=t2s, ps=ps)
         print(f"saving trajectories...")
         return (t1s, t2s, ps)
+
+def get_random_trajectory_reward_with_less_overlap(dataset, len_t, multiplier, start_left, start_right):
+    # Selects a random trajectory and calculates its reward given a range of starting indices.
+    N = dataset['observations'].shape[0]
+    start = np.random.randint(start_left, start_right)
+    while np.any(dataset['terminals'][start:start+len_t], axis=0):
+        start += len_t
+    traj = np.array(np.arange(start, start+len_t))
+    reward = np.sum(dataset['rewards'][start:start+len_t])
+    next_start_left = start + multiplier * len_t
+    next_start_right = next_start_left + len_t
+    if next_start_right >= N - len_t:
+        next_start_left = 0
+        next_start_right = len_t
+    return traj, reward, next_start_left, next_start_right
 
 def get_random_trajectory_reward(dataset, len_t):
     # Selects a random trajectory and calculates its reward.
@@ -307,6 +333,7 @@ def generate_pbrl_dataset_no_overlap(dataset, num_t, len_t, reuse_fraction=0.0, 
         print(f"pbrl_dataset loaded successfully from {pbrl_dataset_file_path}")
         return (pbrl_dataset['t1s'], pbrl_dataset['t2s'], pbrl_dataset['ps'])
     else:
+        print(f"pbrl_dataset not found locally at {pbrl_dataset_file_path}. Generating...")
         t1s = np.zeros((num_t, len_t), dtype=int)
         t2s = np.zeros((num_t, len_t), dtype=int)
         ps = np.zeros(num_t)
@@ -399,13 +426,13 @@ def pick_and_generate_pbrl_dataset(dataset, env, num_t, len_t, num_trials=1, all
         dataset_path = f'saved/pbrl_datasets/pbrl_dataset_{env}_{num_t}_{len_t}_numTrials={num_trials}.npz'
         pbrl_dataset = generate_pbrl_dataset(dataset, num_t=num_t, len_t=len_t, pbrl_dataset_file_path=dataset_path)
     if allow_overlap and reuse_fraction > 0.0:
-        dataset_path_reuse = f'saved/pbrl_datasets_reuse/pbrl_dataset_{env}_{num_t}_{len_t}_numTrials={num_trials}_reuse({reuse_fraction}-{reuse_times})'
+        dataset_path_reuse = f'saved/pbrl_datasets_reuse/pbrl_dataset_{env}_{num_t}_{len_t}_numTrials={num_trials}_reuse({reuse_fraction}-{reuse_times}).npz'
         pbrl_dataset = generate_pbrl_dataset(dataset, num_t=num_t, len_t=len_t, pbrl_dataset_file_path=dataset_path_reuse, reuse_fraction=reuse_fraction, reuse_times=reuse_times)
     if not allow_overlap and reuse_fraction == 0.0:
-        daraset_path_no_overlap = f'saved/pbrl_datasets_no_overlap/pbrl_dataset_{env}_{num_t}_{len_t}_numTrials={num_trials}'
+        daraset_path_no_overlap = f'saved/pbrl_datasets_no_overlap/pbrl_dataset_{env}_{num_t}_{len_t}_numTrials={num_trials}.npz'
         pbrl_dataset = generate_pbrl_dataset_no_overlap(dataset, num_t=num_t, len_t=len_t, pbrl_dataset_file_path=daraset_path_no_overlap)
     if not allow_overlap and reuse_fraction > 0.0:
-        dataset_path_reuse_no_overlap = f'saved/pbrl_datasets_no_overlap_reuse/pbrl_dataset_{env}_{num_t}_{len_t}_numTrials={num_trials}_reuse({reuse_fraction}-{reuse_times})'
+        dataset_path_reuse_no_overlap = f'saved/pbrl_datasets_no_overlap_reuse/pbrl_dataset_{env}_{num_t}_{len_t}_numTrials={num_trials}_reuse({reuse_fraction}-{reuse_times}).npz'
         pbrl_dataset = generate_pbrl_dataset_no_overlap(dataset, num_t=num_t, len_t=len_t, pbrl_dataset_file_path=dataset_path_reuse_no_overlap, reuse_fraction=reuse_fraction, reuse_times=reuse_times)
 
     return pbrl_dataset
