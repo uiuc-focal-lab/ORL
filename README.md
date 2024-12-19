@@ -1,4 +1,4 @@
-# Optimal Reward Labeling
+# Binary Reward Labeling
 
 This repository is based on the [CORL library](https://github.com/tinkoff-ai/CORL).
 
